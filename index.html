@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#153a32">
+<title>ArtikelCheck – prototyp</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17231f;background:#f4f7f5}
+*{box-sizing:border-box}body{margin:0}main{max-width:900px;margin:0 auto;padding:22px 16px 48px}
+header{margin-bottom:22px}h1{margin:0;font-size:clamp(1.8rem,5vw,2.5rem);letter-spacing:-.04em}header p{margin:7px 0 0;color:#53625b}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.panel{background:white;border:1px solid #dce5df;border-radius:18px;padding:16px;min-width:0;box-shadow:0 3px 12px #20382d08}
+.panel h2{font-size:1.08rem;margin:0 0 12px}.sub{font-size:.88rem;color:#65746c;line-height:1.45}
+.preview{width:100%;aspect-ratio:4/3;background:#edf2ee;border:1px dashed #b7c6bc;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:12px 0}
+.preview img{width:100%;height:100%;object-fit:contain}.preview span{color:#7b8981;font-size:.9rem;text-align:center;padding:12px}
+button,.filelabel{border:0;border-radius:10px;padding:11px 14px;font:inherit;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.primary{background:#174c3d;color:white}.secondary{background:#e8f0eb;color:#174c3d}.wide{width:100%}button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions>*{flex:1}
+input[type=file]{display:none}
+label.field{display:block;font-weight:650;font-size:.9rem;margin:15px 0 6px}
+input[type=text]{width:100%;padding:12px;border:1px solid #cbd8cf;border-radius:10px;font:inherit;font-size:1.05rem;letter-spacing:.02em;background:white}
+.status{margin-top:16px;border-radius:14px;padding:17px;text-align:center;background:#e8eee9;border:1px solid #d5dfd8}
+.status h2{margin:0 0 5px;font-size:1.3rem}.status p{margin:0;color:#52635a}
+.status.ok{background:#e6f5eb;border-color:#9dd5af;color:#135d31}.status.bad{background:#fff0ed;border-color:#e9b3a9;color:#922e20}.status.warn{background:#fff7df;border-color:#ead28c;color:#73530a}
+.status.ok p,.status.bad p,.status.warn p{color:inherit}
+.note{font-size:.88rem;color:#65746c;line-height:1.5;margin-top:16px}
+details{margin-top:16px;background:white;border:1px solid #dce5df;border-radius:12px;padding:12px 14px}summary{font-weight:650;cursor:pointer}
+#cameraDialog{border:0;border-radius:18px;padding:16px;width:min(95vw,600px);box-shadow:0 20px 70px #0004}
+#cameraDialog::backdrop{background:#10251fcc}
+#video{width:100%;border-radius:12px;background:#111;max-height:60vh}
+.dialogActions{display:flex;gap:8px;margin-top:12px}.dialogActions button{flex:1}
+small{color:#65746c}
+@media(max-width:620px){main{padding:18px 12px 32px}.grid{grid-template-columns:1fr}.panel{padding:14px}.actions button{font-size:.94rem}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>ArtikelCheck</h1>
+  <p>Fotografera två blanketter och jämför artikelnumren.</p>
+</header>
+
+<div class="grid">
+  <section class="panel">
+    <h2>1. Referensblankett</h2>
+    <p class="sub">Fotografera första blanketten. Använd samma utsnitt och placering varje gång.</p>
+    <div class="preview" id="preview1"><span>Ingen bild vald ännu</span></div>
+    <div class="actions">
+      <button class="primary" type="button" onclick="openCamera(1)">📷 Öppna kamera</button>
+      <label class="filelabel secondary" for="file1">Välj bild</label>
+      <input id="file1" type="file" accept="image/*" capture="environment">
+    </div>
+    <label class="field" for="num1">Avläst artikelnummer</label>
+    <input id="num1" type="text" autocomplete="off" spellcheck="false" placeholder="Ex. AB-123456">
+    <p class="sub" id="ocr1">Ta en bild för att läsa texten.</p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Kontrollblankett</h2>
+    <p class="sub">Fotografera den andra blanketten. Artikelnumret behöver vara i samma område.</p>
+    <div class="preview" id="preview2"><span>Ingen bild vald ännu</span></div>
+    <div class="actions">
+      <button class="primary" type="button" onclick="openCamera(2)">📷 Öppna kamera</button>
+      <label class="filelabel secondary" for="file2">Välj bild</label>
+      <input id="file2" type="file" accept="image/*" capture="environment">
+    </div>
+    <label class="field" for="num2">Avläst artikelnummer</label>
+    <input id="num2" type="text" autocomplete="off" spellcheck="false" placeholder="Ex. AB-123456">
+    <p class="sub" id="ocr2">Ta en bild för att läsa texten.</p>
+  </section>
+</div>
+
+<section class="status" id="result" aria-live="polite">
+  <h2>Redo att jämföra</h2>
+  <p>Fyll i eller läs av båda artikelnumren.</p>
+</section>
+<div class="actions" style="margin-top:12px">
+  <button class="primary wide" id="compare" type="button">Jämför artikelnummer</button>
+  <button class="secondary" id="reset" type="button">Börja om</button>
+</div>
+<p class="note"><strong>Viktigt:</strong> OCR kan läsa fel, särskilt O/0, I/1 och bindestreck. Kontrollera alltid den avlästa texten. Appen godkänner bara två identiska fält och gör inga automatiska ändringar av tecken.</p>
+<details>
+  <summary>Inställning för första testet</summary>
+  <p class="sub">Eftersom blanketten har samma layout varje gång kan nästa version beskäras till ett fast område. Den här prototypen läser all synlig text i fotot och visar ett förslag; du kan rätta artikelnumret manuellt.</p>
+  <label class="field" for="lang">OCR-språk</label>
+  <select id="lang" style="width:100%;padding:10px;border-radius:10px;border:1px solid #cbd8cf;font:inherit">
+    <option value="eng">Engelska (bra första test för artikelkoder)</option>
+    <option value="swe">Svenska</option>
+    <option value="eng+swe">Engelska + svenska</option>
+  </select>
+</details>
+</main>
+
+<dialog id="cameraDialog">
+  <h2>Fotografera blanketten</h2>
+  <p class="sub">Rikta kameran mot blanketten och se till att artikelnumret är skarpt.</p>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" hidden></canvas>
+  <div class="dialogActions">
+    <button class="primary" id="snap" type="button">Ta foto</button>
+    <button class="secondary" id="closeCamera" type="button">Stäng</button>
+  </div>
+  <p class="sub" id="cameraMsg"></p>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+const state = {1:{image:null, stream:null},2:{image:null,stream:null}};
+const $ = id => document.getElementById(id);
+let activeCameraSlot = null;
+
+function setPreview(slot, src) {
+  const p = $('preview'+slot);
+  p.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = 'Foto av blankett '+slot;
+  p.appendChild(img);
+}
+function setResult(kind, title, detail) {
+  const r = $('result');
+  r.className = 'status' + (kind ? ' '+kind : '');
+  r.innerHTML = '';
+  const h = document.createElement('h2'); h.textContent = title;
+  const p = document.createElement('p'); p.textContent = detail;
+  r.append(h,p);
+}
+function loadFile(slot, file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    state[slot].image = reader.result;
+    setPreview(slot, reader.result);
+    runOCR(slot, reader.result);
+  };
+  reader.readAsDataURL(file);
+}
+$('file1').addEventListener('change', e=>loadFile(1,e.target.files[0]));
+$('file2').addEventListener('change', e=>loadFile(2,e.target.files[0]));
+
+async function runOCR(slot, src) {
+  const out = $('ocr'+slot);
+  out.textContent = 'Läser text från bilden…';
+  try {
+    if (!window.Tesseract) throw new Error('OCR-biblioteket kunde inte laddas. Kontrollera internetanslutningen.');
+    const lang = $('lang').value;
+    const worker = await Tesseract.createWorker(lang, 1, {
+      logger: m => { if(m.status==='recognizing text') out.textContent='Läser text… '+Math.round((m.progress||0)*100)+'%'; }
+    });
+    const result = await worker.recognize(src);
+    await worker.terminate();
+    const text = result.data.text || '';
+    const candidates = extractCandidate(text);
+    if (candidates.length) {
+      $('num'+slot).value = candidates[0];
+      out.textContent = 'Förslag från OCR: "'+candidates[0]+'". Kontrollera att det är rätt nummer.';
+    } else {
+      out.textContent = 'Ingen tydlig artikelkod hittades. Skriv numret manuellt i fältet.';
+    }
+  } catch (err) {
+    out.textContent = 'Kunde inte läsa bilden: '+err.message+' Du kan skriva numret manuellt.';
+  }
+}
+function extractCandidate(text) {
+  // Fångar koder med minst en bokstav och en siffra, med valfria bindestreck.
+  const matches = text.toUpperCase().match(/[A-Z0-9]+(?:-[A-Z0-9]+)*/g) || [];
+  const candidates = matches.map(s=>s.replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g,''))
+    .filter(s=>/[A-Z]/.test(s) && /\d/.test(s) && s.length>=4);
+  return [...new Set(candidates)].sort((a,b)=>b.length-a.length);
+}
+function compare() {
+  const a = $('num1').value;
+  const b = $('num2').value;
+  if (!a.trim() || !b.trim()) {
+    setResult('warn','Behöver två artikelnummer','Fota båda blanketterna eller skriv numren i fälten.');
+    return;
+  }
+  // Exakt jämförelse: inga trimningar utöver att kontrollera tomma fält.
+  if (a === b) setResult('ok','GODKÄND','Artikelnumren är exakt identiska.');
+  else setResult('bad','FEL ARTIKEL','Numren skiljer sig åt. Kontrollera båda fälten.');
+}
+$('compare').addEventListener('click', compare);
+$('num1').addEventListener('input', ()=>setResult('', 'Redo att jämföra','Tryck på ”Jämför artikelnummer” när båda fälten är klara.'));
+$('num2').addEventListener('input', ()=>setResult('', 'Redo att jämföra','Tryck på ”Jämför artikelnummer” när båda fälten är klara.'));
+$('reset').addEventListener('click', ()=>{
+  [1,2].forEach(slot=>{
+    state[slot].image=null;
+    $('num'+slot).value='';
+    $('ocr'+slot).textContent='Ta en bild för att läsa texten.';
+    $('preview'+slot).innerHTML='<span>Ingen bild vald ännu</span>';
+    $('file'+slot).value='';
+  });
+  setResult('', 'Redo att jämföra','Fyll i eller läs av båda artikelnumren.');
+});
+
+async function openCamera(slot) {
+  activeCameraSlot = slot;
+  const dlg = $('cameraDialog');
+  const video = $('video');
+  $('cameraMsg').textContent = '';
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $('cameraMsg').textContent='Direkt kameraåtkomst stöds inte här. Använd ”Välj bild” i stället.';
+      dlg.showModal();
+      return;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    state[slot].stream = stream;
+    video.srcObject = stream;
+    dlg.showModal();
+  } catch (e) {
+    $('cameraMsg').textContent='Kunde inte öppna kameran. Tillåt kameraåtkomst eller använd ”Välj bild”.';
+    dlg.showModal();
+  }
+}
+function stopCamera() {
+  Object.values(state).forEach(s=>{ if(s.stream){s.stream.getTracks().forEach(t=>t.stop());s.stream=null;} });
+  $('video').srcObject=null;
+  $('cameraDialog').close();
+}
+$('closeCamera').addEventListener('click',stopCamera);
+$('snap').addEventListener('click',()=>{
+  const video=$('video'), canvas=$('canvas');
+  if(!video.videoWidth){$('cameraMsg').textContent='Kameran startar fortfarande. Försök igen om en stund.';return;}
+  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
+  const data=canvas.toDataURL('image/jpeg',0.92);
+  const slot=activeCameraSlot;
+  state[slot].image=data; setPreview(slot,data);
+  stopCamera(); runOCR(slot,data);
+});
+$('cameraDialog').addEventListener('cancel', e=>{e.preventDefault();stopCamera();});
+</script>
+</body>
+</html>
